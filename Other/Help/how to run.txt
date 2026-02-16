@@ -1,0 +1,35 @@
+LINUX:
+    Option A - Double-click (recommended):
+      1. Open the NetworkTrafficAnalyzerPortable/ folder in your
+         file manager.
+      2. Double-click "NetworkTraffic Analyzer".
+      3. A graphical password dialog will appear (like Windows UAC).
+      4. Enter your password and the app launches.
+
+    Option B - Terminal:
+      1. Open a terminal in the NetworkTrafficAnalyzerPortable/ folder.
+      2. Run:  ./NetworkTrafficAnalyzerPortable.sh
+      3. A graphical password prompt will appear automatically.
+         (Falls back to terminal sudo if no desktop is detected.)
+
+    CLI mode (no GUI):
+      ./NetworkTrafficAnalyzerPortable.sh --cli
+
+  WINDOWS:
+    1. Navigate to the NetworkTrafficAnalyzerPortable\ folder.
+    2. Right-click NetworkTrafficAnalyzerPortable.bat ->
+       "Run as administrator".
+    3. CLI mode (no GUI):
+         Open Command Prompt as Administrator, then:
+         NetworkTrafficAnalyzerPortable.bat --cli
+
+  macOS:
+    1. Open Terminal and navigate to the
+       NetworkTrafficAnalyzerPortable/ folder.
+    2. Launch the app:
+         ./NetworkTrafficAnalyzerPortable.sh
+    3. If prompted, enter your password for sudo access.
+    4. CLI mode (no GUI):
+         ./NetworkTrafficAnalyzerPortable.sh --cli
+    5. Note: On macOS, you may need to allow Terminal in
+         System Settings -> Privacy & Security -> App Management.

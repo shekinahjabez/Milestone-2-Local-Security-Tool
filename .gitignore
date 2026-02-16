@@ -1,0 +1,18 @@
+# Build artifacts
+App/NetworkTrafficAnalyzer/build/
+App/NetworkTrafficAnalyzer/dist/
+App/NetworkTrafficAnalyzer/*.spec
+App/NetworkTrafficAnalyzer/NetworkTrafficAnalyzer
+App/NetworkTrafficAnalyzer/NetworkTrafficAnalyzer.exe
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# User data (portable - per-user, not committed)
+Data/
+
+# OS junk
+.DS_Store
+Thumbs.db
