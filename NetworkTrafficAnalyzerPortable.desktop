@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=NetworkTraffic Analyzer
-Comment=Real-Time Packet Capture - Portable Edition
-Exec=/home/hanzi/Documents/mmdc/SSP/MS2/Homework5/NetworkTrafficAnalyzerPortable/NetworkTrafficAnalyzerPortable.sh
-Path=/home/hanzi/Documents/mmdc/SSP/MS2/Homework5/NetworkTrafficAnalyzerPortable
-Terminal=false
-Categories=Network;Security;
-StartupNotify=true

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Local Security Tool
+Comment=Integrated Port Scanner and Network Traffic Analyzer - Portable Edition
+Exec=/home/hanzi/Documents/mmdc/SSP/MS2/MILESTONE2_LOCAL_SECURITY_TOOL/LocalSecurityTool.sh
+Path=/home/hanzi/Documents/mmdc/SSP/MS2/MILESTONE2_LOCAL_SECURITY_TOOL
+Terminal=true
+Categories=Network;Security;
+StartupNotify=true

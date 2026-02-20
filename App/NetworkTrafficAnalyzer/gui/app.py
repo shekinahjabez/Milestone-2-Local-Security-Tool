@@ -6,8 +6,8 @@ import os
 import sys
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.sniffer import CaptureEngine, SCAPY_AVAILABLE
+#sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from NetworkTrafficAnalyzer.core.sniffer import CaptureEngine, SCAPY_AVAILABLE
 
 # Color scheme
 PRIMARY_COLOR = "#007bff"
@@ -26,7 +26,10 @@ WARNING_YELLOW = "#ffc107"
 class NetworkTrafficAnalyzerApp:
     """Main application window."""
 
-    def __init__(self, root):
+    def __init__(self, root, parent=None):
+        self.root = root
+        self.parent = parent if parent else root
+    #def __init__(self, root):
         self.root = root
         self.root.title("NetworkTraffic Analyzer - Portable Edition")
         self.root.geometry("960x720")
@@ -53,16 +56,28 @@ class NetworkTrafficAnalyzerApp:
         self._check_scapy()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+    #def _build_ui(self):
+        #self._build_header()
+        #self._build_filter_section()
+        #self._build_controls()
+        #self._build_display()
+        #self._build_stats()
+        #self._build_footer()
+
     def _build_ui(self):
-        self._build_header()
+        if self.parent == self.root:
+            self._build_header()
+
         self._build_filter_section()
         self._build_controls()
         self._build_display()
         self._build_stats()
-        self._build_footer()
+
+        if self.parent == self.root:
+            self._build_footer()
 
     def _build_header(self):
-        header = tk.Frame(self.root, bg=HEADER_BG, pady=16)
+        header = tk.Frame(self.parent, bg=HEADER_BG, pady=16)
         header.pack(fill=tk.X)
 
         tk.Label(
@@ -76,7 +91,7 @@ class NetworkTrafficAnalyzerApp:
         ).pack()
 
     def _build_filter_section(self):
-        section = tk.Frame(self.root, bg=WHITE, padx=24, pady=16)
+        section = tk.Frame(self.parent, bg=WHITE, padx=24, pady=16)
         section.pack(fill=tk.X, padx=24, pady=(16, 4))
 
         tk.Label(
@@ -117,7 +132,7 @@ class NetworkTrafficAnalyzerApp:
         ).pack(side=tk.LEFT)
 
     def _build_controls(self):
-        section = tk.Frame(self.root, bg=BG_COLOR, pady=8)
+        section = tk.Frame(self.parent, bg=BG_COLOR, pady=8)
         section.pack(fill=tk.X, padx=24)
 
         btn_frame = tk.Frame(section, bg=BG_COLOR)
@@ -148,7 +163,7 @@ class NetworkTrafficAnalyzerApp:
         self.export_btn.pack(side=tk.LEFT, padx=6)
 
     def _build_display(self):
-        section = tk.Frame(self.root, bg=WHITE, padx=24, pady=16)
+        section = tk.Frame(self.parent, bg=WHITE, padx=24, pady=16)
         section.pack(fill=tk.BOTH, expand=True, padx=24, pady=(4, 4))
 
         tk.Label(
@@ -171,7 +186,7 @@ class NetworkTrafficAnalyzerApp:
         self.output_text.tag_configure("info", foreground="#608b4e")
 
     def _build_stats(self):
-        section = tk.Frame(self.root, bg=WHITE, padx=24, pady=10)
+        section = tk.Frame(self.parent, bg=WHITE, padx=24, pady=10)
         section.pack(fill=tk.X, padx=24, pady=(0, 4))
 
         self.stats_labels = {}
@@ -187,7 +202,7 @@ class NetworkTrafficAnalyzerApp:
             self.stats_labels[proto] = lbl
 
     def _build_footer(self):
-        footer = tk.Frame(self.root, bg=HEADER_BG, pady=8)
+        footer = tk.Frame(self.parent, bg=HEADER_BG, pady=8)
         footer.pack(fill=tk.X, side=tk.BOTTOM)
 
         tk.Label(
@@ -290,6 +305,10 @@ class NetworkTrafficAnalyzerApp:
         if self.engine.running:
             self.engine.stop()
         self.root.destroy()
+
+    def shutdown(self):
+        if self.engine.running:
+            self.engine.stop()
 
 
 def main():
