@@ -10,10 +10,8 @@
 # Runs directly from this folder. No installation required.
 # Copy the entire folder to a USB drive and run from there.
 #
-# Note: Packet capture may require sudo/admin privileges.
+# Note: Packet capture and raw socket access require root/sudo privileges.
 # =============================================================
-
-set -e
 
 echo "============================================"
 echo "        LOCAL SECURITY TOOL"
@@ -30,15 +28,23 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_EXE="$ROOT_DIR/App/LocalSecurityTool/LocalSecurityTool"
 APP_PY="$ROOT_DIR/App/suite_main.py"
 
-# Prefer compiled binary (if present)
+# ── Determine what to run ──────────────────────────────────────
 if [ -f "$APP_EXE" ] && [ -x "$APP_EXE" ]; then
   echo "Running compiled Local Security Tool..."
-  "$APP_EXE" "$@"
-  exit 0
-fi
-
-# Fall back to Python source
-if [ ! -f "$APP_PY" ]; then
+  TARGET="$APP_EXE"
+elif [ -f "$APP_PY" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    PYTHON="python3"
+  elif command -v python >/dev/null 2>&1; then
+    PYTHON="python"
+  else
+    echo "Error: Python 3 is required but not found in PATH."
+    echo "Install Python 3 and try again."
+    exit 1
+  fi
+  echo "Running from Python source with $PYTHON..."
+  TARGET="$PYTHON $APP_PY"
+else
   echo "Error: Local Security Tool entry file not found."
   echo ""
   echo "Expected:"
@@ -52,20 +58,30 @@ if [ ! -f "$APP_PY" ]; then
   exit 1
 fi
 
-echo "Running from Python source..."
+echo "Note: Raw socket / port scan operations require root/sudo privileges."
 echo ""
 
-# Prefer python3, fall back to python
-if command -v python3 >/dev/null 2>&1; then
-  python3 "$APP_PY" "$@"
-  exit 0
-fi
+# ── Privilege elevation ────────────────────────────────────────
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Elevating to root for privileged operations..."
 
-if command -v python >/dev/null 2>&1; then
-  python "$APP_PY" "$@"
-  exit 0
-fi
+  # Resolve XAUTHORITY if not set (common when launched from a .desktop file)
+  if [ -z "$XAUTHORITY" ]; then
+    if [ -f "$HOME/.Xauthority" ]; then
+      XAUTHORITY="$HOME/.Xauthority"
+    else
+      XAUTHORITY=$(ls /run/user/"$(id -u)"/.mutter-Xwaylandauth.* 2>/dev/null | head -1)
+    fi
+  fi
 
-echo "Error: Python 3 is required but not found in PATH."
-echo "Install Python 3 and try again."
-exit 1
+  # Try pkexec first (graphical password prompt, like Windows UAC)
+  if command -v pkexec &>/dev/null && [ -n "$DISPLAY" ]; then
+    xhost +SI:localuser:root 2>/dev/null || true
+    pkexec env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" $TARGET "$@"
+  else
+    # Fall back to sudo in terminal
+    sudo --preserve-env=DISPLAY,XAUTHORITY,HOME $TARGET "$@"
+  fi
+else
+  $TARGET "$@"
+fi
