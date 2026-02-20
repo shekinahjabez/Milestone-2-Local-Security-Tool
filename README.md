@@ -1,4 +1,3 @@
-📄 README.md
 # Local Security Tool (Portable Edition)
 
 Local Security Tool is an integrated security application developed for  
