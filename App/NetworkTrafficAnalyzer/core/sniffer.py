@@ -1,11 +1,12 @@
 """NetworkTraffic Analyzer - Packet capture module using Scapy."""
 
+import os
 import threading
 import time
 from datetime import datetime
 
 try:
-    from scapy.all import sniff, IP, TCP, UDP, ICMP, conf
+    from scapy.all import IP, TCP, UDP, ICMP, conf, AsyncSniffer, wrpcap
     SCAPY_AVAILABLE = True
 except ImportError:
     SCAPY_AVAILABLE = False
@@ -37,6 +38,41 @@ def build_bpf_filter(protocol="", port=""):
                 f"Invalid port '{port}'. Enter a number between 1 and 65535."
             )
         parts.append(f"port {port_num}")
+
+    return " and ".join(parts) if parts else ""
+
+def build_ip_filter(ip="", src_ip="", dst_ip=""):
+    """Build BPF host/src/dst filters from IP fields (IPv4)."""
+
+    def is_ipv4(s: str) -> bool:
+        s = s.strip()
+        parts = s.split(".")
+        if len(parts) != 4:
+            return False
+        try:
+            return all(0 <= int(p) <= 255 for p in parts)
+        except ValueError:
+            return False
+
+    parts = []
+    ip = ip.strip()
+    src_ip = src_ip.strip()
+    dst_ip = dst_ip.strip()
+
+    if ip:
+        if not is_ipv4(ip):
+            raise ValueError(f"Invalid IP '{ip}'. Use IPv4 like 192.168.1.10")
+        parts.append(f"host {ip}")
+
+    if src_ip:
+        if not is_ipv4(src_ip):
+            raise ValueError(f"Invalid Source IP '{src_ip}'. Use IPv4 format.")
+        parts.append(f"src host {src_ip}")
+
+    if dst_ip:
+        if not is_ipv4(dst_ip):
+            raise ValueError(f"Invalid Destination IP '{dst_ip}'. Use IPv4 format.")
+        parts.append(f"dst host {dst_ip}")
 
     return " and ".join(parts) if parts else ""
 
@@ -153,15 +189,25 @@ def format_packet_line(details):
 
 
 class CaptureEngine:
-    """Manages packet capture in a background daemon thread."""
+    """Manages packet capture in a background thread using AsyncSniffer."""
 
-    def __init__(self):
+    def __init__(self, log_dir="logs"):
         self.running = False
         self.callback = None
-        self.packets = []
-        self._thread = None
+        self.packets = []          # formatted dicts
+        self._sniffer = None       # AsyncSniffer instance
 
-    def start(self, protocol="", port="", callback=None):
+        self.log_dir = log_dir
+        os.makedirs(self.log_dir, exist_ok=True)
+
+        self._pcap_path = ""       # where we saved the pcap (after stop)
+        self._raw_packets = []     # scapy packets for pcap
+
+    def get_pcap_path(self):
+        """Return last saved PCAP path (empty string if none)."""
+        return self._pcap_path
+
+    def start(self, protocol="", port="", ip="", src_ip="", dst_ip="", callback=None):
         """Start capturing packets with optional filters."""
         if not SCAPY_AVAILABLE:
             raise RuntimeError(
@@ -169,47 +215,74 @@ class CaptureEngine:
                 "  pip install scapy\nThen restart the application."
             )
 
-        bpf_filter = build_bpf_filter(protocol, port)
-        self.running = True
+        # Build filter parts
+        bpf1 = build_bpf_filter(protocol, port)
+        bpf2 = build_ip_filter(ip, src_ip, dst_ip)
+        bpf_filter = " and ".join([p for p in (bpf1, bpf2) if p]).strip()
+
         self.callback = callback
         self.packets = []
+        self._raw_packets = []
+        self._pcap_path = ""
+        self.running = True
+
         conf.verb = 0
 
-        self._thread = threading.Thread(
-            target=self._capture_loop,
-            args=(bpf_filter,),
-            daemon=True,
-        )
-        self._thread.start()
-
-    def _capture_loop(self, bpf_filter):
-        """Sniff loop running in daemon thread."""
         try:
-            sniff(
+            self._sniffer = AsyncSniffer(
                 filter=bpf_filter if bpf_filter else None,
                 prn=self._process_packet,
-                stop_filter=lambda _: not self.running,
                 store=False,
             )
+            self._sniffer.start()
         except PermissionError:
-            if self.callback:
-                self.callback(
-                    "[ERROR] Permission denied. Run with admin/root privileges."
-                )
-        except Exception as e:
-            if self.callback:
-                self.callback(f"[ERROR] Capture failed: {e}")
-        finally:
             self.running = False
+            raise
+        except Exception as e:
+            self.running = False
+            raise RuntimeError(f"Capture failed to start: {e}")
 
     def _process_packet(self, packet):
         """Format a packet and send to callback."""
+        if not self.running:
+            return
+
+        self._raw_packets.append(packet)
+
         details = format_packet(packet)
         self.packets.append(details)
+
         line = format_packet_line(details)
         if self.callback:
             self.callback(line)
 
     def stop(self):
-        """Signal the capture thread to stop."""
+        """Stop capture (NO file writing here)."""
+        if not self.running:
+            return
+
         self.running = False
+
+        try:
+            if self._sniffer:
+                self._sniffer.stop()
+        except Exception:
+            pass
+
+    def export_pcap(self, out_dir=None):
+        """
+        Save captured packets as a PCAP file into out_dir (default: self.log_dir).
+        Returns the saved pcap path, or "" if nothing saved.
+        """
+        out_dir = out_dir or self.log_dir
+        os.makedirs(out_dir, exist_ok=True)
+
+        if not self._raw_packets:
+            self._pcap_path = ""
+            return ""
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self._pcap_path = os.path.join(out_dir, f"traffic_{ts}.pcap")
+
+        wrpcap(self._pcap_path, self._raw_packets)
+        return self._pcap_path
