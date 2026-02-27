@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================
 # Local Security Tool - Portable Edition
-# Linux/Mac Launcher
+# Linux/macOS Launcher
 # =============================================================
 # Integrated Security Suite:
 #   - Network Port Scanner

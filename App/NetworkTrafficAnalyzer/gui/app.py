@@ -29,40 +29,23 @@ class NetworkTrafficAnalyzerApp:
     def __init__(self, root, parent=None):
         self.root = root
         self.parent = parent if parent else root
-    #def __init__(self, root):
-        self.root = root
-        self.root.title("NetworkTraffic Analyzer - Portable Edition")
-        self.root.geometry("960x720")
-        self.root.minsize(760, 560)
-        self.root.configure(bg=BG_COLOR)
 
-        self.engine = CaptureEngine()
-        self.packet_count = {"TCP": 0, "UDP": 0, "ICMP": 0, "Other": 0}
+        # Only configure the window in standalone mode
+        if self.parent == self.root:
+            self.root.title("NetworkTraffic Analyzer - Portable Edition")
+            self.root.geometry("960x720")
+            self.root.minsize(760, 560)
+            self.root.configure(bg=BG_COLOR)
 
-        # Resolve data directory
-        self.data_dir = os.environ.get("NTA_DATA_DIR", "")
-        if not self.data_dir:
-            portable_root = os.path.dirname(
-                os.path.dirname(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                )
-            )
-            self.data_dir = os.path.join(portable_root, "Data")
-
-        self.log_dir = os.path.join(self.data_dir, "logs")
-        os.makedirs(self.log_dir, exist_ok=True)
-
+        self.engine = CaptureEngine(log_dir=os.environ.get("NTA_LOG_DIR", "logs"))
+        ...
         self._build_ui()
         self._check_scapy()
-        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-    #def _build_ui(self):
-        #self._build_header()
-        #self._build_filter_section()
-        #self._build_controls()
-        #self._build_display()
-        #self._build_stats()
-        #self._build_footer()
+        # Only hook close button in standalone mode
+        if self.parent == self.root:
+            self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
 
     def _build_ui(self):
         if self.parent == self.root:
@@ -70,8 +53,8 @@ class NetworkTrafficAnalyzerApp:
 
         self._build_filter_section()
         self._build_controls()
-        self._build_display()
         self._build_stats()
+        self._build_display()
 
         if self.parent == self.root:
             self._build_footer()
@@ -128,6 +111,43 @@ class NetworkTrafficAnalyzerApp:
         self.port_var = tk.StringVar()
         tk.Entry(
             input_frame, textvariable=self.port_var, width=10,
+            font=("Helvetica", 10), relief=tk.SOLID, borderwidth=1,
+        ).pack(side=tk.LEFT)
+
+        # ---- IP filters row ----
+        ip_row = tk.Frame(section, bg=WHITE)
+        ip_row.pack(fill=tk.X, pady=(12, 0))
+
+        tk.Label(
+            ip_row, text="IP (any):",
+            font=("Helvetica", 10, "bold"), bg=WHITE, fg=TEXT_COLOR,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        self.ip_any_var = tk.StringVar()
+        tk.Entry(
+            ip_row, textvariable=self.ip_any_var, width=18,
+            font=("Helvetica", 10), relief=tk.SOLID, borderwidth=1,
+        ).pack(side=tk.LEFT, padx=(0, 16))
+
+        tk.Label(
+            ip_row, text="Source IP:",
+            font=("Helvetica", 10, "bold"), bg=WHITE, fg=TEXT_COLOR,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        self.src_ip_var = tk.StringVar()
+        tk.Entry(
+            ip_row, textvariable=self.src_ip_var, width=18,
+            font=("Helvetica", 10), relief=tk.SOLID, borderwidth=1,
+        ).pack(side=tk.LEFT, padx=(0, 16))
+
+        tk.Label(
+            ip_row, text="Destination IP:",
+            font=("Helvetica", 10, "bold"), bg=WHITE, fg=TEXT_COLOR,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        self.dst_ip_var = tk.StringVar()
+        tk.Entry(
+            ip_row, textvariable=self.dst_ip_var, width=18,
             font=("Helvetica", 10), relief=tk.SOLID, borderwidth=1,
         ).pack(side=tk.LEFT)
 
@@ -225,10 +245,18 @@ class NetworkTrafficAnalyzerApp:
             protocol = ""
 
         port = self.port_var.get().strip()
+        ip_any = self.ip_any_var.get().strip()
+        src_ip = self.src_ip_var.get().strip()
+        dst_ip = self.dst_ip_var.get().strip()
 
         try:
             self.engine.start(
-                protocol=protocol.lower(), port=port, callback=self._on_packet,
+                protocol=protocol.lower(),
+                port=port,
+                ip=ip_any,
+                src_ip=src_ip,
+                dst_ip=dst_ip,
+                callback=self._on_packet,
             )
         except (RuntimeError, ValueError) as e:
             messagebox.showerror("Filter Error", str(e))
@@ -239,14 +267,22 @@ class NetworkTrafficAnalyzerApp:
         self.packet_count = {"TCP": 0, "UDP": 0, "ICMP": 0, "Other": 0}
         self._update_stats()
 
-        filter_desc = f"Protocol={protocol or 'All'}, Port={port or 'Any'}"
+        filter_desc = (
+            f"Protocol={protocol or 'All'}, Port={port or 'Any'}, "
+            f"IP={ip_any or 'Any'}, SRC={src_ip or 'Any'}, DST={dst_ip or 'Any'}"
+        )
         self._append_output(f"Capture started... ({filter_desc})\n", tag="info")
 
     def _stop_capture(self):
         self.engine.stop()
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
-        self._append_output("Capture stopped.\n", tag="info")
+
+        pcap_path = self.engine.get_pcap_path() if hasattr(self.engine, "get_pcap_path") else ""
+        if pcap_path:
+            self._append_output(f"Capture stopped. Saved PCAP: {pcap_path}\n", tag="info")
+        else:
+            self._append_output("Capture stopped.\n", tag="info")
 
     def _on_packet(self, line):
         """Thread-safe callback: schedule GUI update on main thread."""

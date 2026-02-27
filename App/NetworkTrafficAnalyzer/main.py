@@ -4,6 +4,7 @@
 import sys
 import os
 import shutil
+import time
 
 # Path resolution for both source and PyInstaller execution
 if getattr(sys, 'frozen', False):
@@ -38,6 +39,7 @@ initialize_data_directory()
 os.environ["NTA_DATA_DIR"] = DATA_DIR
 os.environ["NTA_APP_DIR"] = APP_DIR
 os.environ["NTA_PORTABLE_ROOT"] = PORTABLE_ROOT
+os.environ["NTA_LOG_DIR"] = os.path.join(DATA_DIR, "logs")
 
 
 # --- Dependency Auto-Install (bundled offline in App/Dependencies/) ---
@@ -256,24 +258,40 @@ def run_cli():
     print("  NetworkTraffic Analyzer - Portable Edition (CLI)")
     print("=" * 60)
     print(f"  Data directory: {DATA_DIR}")
+    print(f"  Logs directory: {os.environ.get('NTA_LOG_DIR')}")
     print("=" * 60)
 
     protocol = input("\nFilter by protocol (tcp/udp/icmp or Enter for all): ").strip()
     port = input("Filter by port (or Enter for any): ").strip()
 
-    engine = CaptureEngine()
+    ip_any = input("Filter by IP (matches src OR dst, Enter for any): ").strip()
+    src_ip = input("Filter by Source IP (Enter for any): ").strip()
+    dst_ip = input("Filter by Destination IP (Enter for any): ").strip()
+
+    engine = CaptureEngine(log_dir=os.environ.get("NTA_LOG_DIR", os.path.join(DATA_DIR, "logs")))
 
     try:
-        engine.start(protocol=protocol, port=port, callback=print)
+        engine.start(
+            protocol=protocol,
+            port=port,
+            ip=ip_any,
+            src_ip=src_ip,
+            dst_ip=dst_ip,
+            callback=print
+        )
         print("\nCapture started... Press Ctrl+C to stop.\n")
+
         while engine.running:
-            pass
+            time.sleep(0.2)
+
     except (ValueError, RuntimeError) as e:
         print(f"Error: {e}")
         sys.exit(1)
     except KeyboardInterrupt:
         engine.stop()
         print("\nCapture stopped.")
+        if hasattr(engine, "get_pcap_path"):
+            print("Saved PCAP:", engine.get_pcap_path())
 
 
 def run_gui():
@@ -283,7 +301,8 @@ def run_gui():
 
 
 if __name__ == "__main__":
-    check_dependencies()
+    if not check_dependencies():
+        sys.exit(1)
 
     if "--cli" in sys.argv:
         run_cli()

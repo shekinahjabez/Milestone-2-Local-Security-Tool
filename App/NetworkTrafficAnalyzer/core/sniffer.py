@@ -3,28 +3,60 @@
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
+import ipaddress
 
 try:
     from scapy.all import sniff, IP, TCP, UDP, ICMP, conf
+    from scapy.utils import PcapWriter
     SCAPY_AVAILABLE = True
 except ImportError:
     SCAPY_AVAILABLE = False
 
 
-def build_bpf_filter(protocol="", port=""):
-    """Build a BPF filter string from protocol and port values."""
+def _validate_ip(value: str, label: str) -> str:
+    """Validate an IPv4/IPv6 address string. Returns normalized string."""
+    value = (value or "").strip()
+    if not value:
+        return ""
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        raise ValueError(f"Invalid {label} '{value}'. Enter a valid IP address.")
+
+
+def build_bpf_filter(protocol="", port="", ip="", src_ip="", dst_ip=""):
+    """
+    Build a BPF filter string from protocol/port and IP filters.
+    - ip: match either src or dst (host X)
+    - src_ip: match src host X
+    - dst_ip: match dst host X
+    """
     parts = []
-    protocol = protocol.strip().lower()
-    port = port.strip()
+
+    protocol = (protocol or "").strip().lower()
+    port = (port or "").strip()
+
+    ip = _validate_ip(ip, "IP")
+    src_ip = _validate_ip(src_ip, "Source IP")
+    dst_ip = _validate_ip(dst_ip, "Destination IP")
 
     valid_protocols = ("tcp", "udp", "icmp", "")
     if protocol not in valid_protocols:
-        raise ValueError(
-            f"Invalid protocol '{protocol}'. Please enter TCP, UDP, or ICMP."
-        )
+        raise ValueError(f"Invalid protocol '{protocol}'. Please enter TCP, UDP, or ICMP.")
+
     if protocol:
         parts.append(protocol)
 
+    # IP filters
+    if ip:
+        parts.append(f"host {ip}")
+    if src_ip:
+        parts.append(f"src host {src_ip}")
+    if dst_ip:
+        parts.append(f"dst host {dst_ip}")
+
+    # Port filter
     if port:
         if protocol == "icmp":
             raise ValueError("ICMP does not use ports. Remove the port filter.")
@@ -33,9 +65,7 @@ def build_bpf_filter(protocol="", port=""):
             if not 1 <= port_num <= 65535:
                 raise ValueError
         except ValueError:
-            raise ValueError(
-                f"Invalid port '{port}'. Enter a number between 1 and 65535."
-            )
+            raise ValueError(f"Invalid port '{port}'. Enter a number between 1 and 65535.")
         parts.append(f"port {port_num}")
 
     return " and ".join(parts) if parts else ""
@@ -126,9 +156,7 @@ def format_packet(packet):
         details["protocol"] = "ICMP"
         icmp_type = packet[ICMP].type
         icmp_code = packet[ICMP].code
-        desc = ICMP_TYPE_NAMES.get(
-            (icmp_type, icmp_code), f"Type {icmp_type}, Code {icmp_code}"
-        )
+        desc = ICMP_TYPE_NAMES.get((icmp_type, icmp_code), f"Type {icmp_type}, Code {icmp_code}")
         details["summary"] = desc
     else:
         details["summary"] = packet.summary()
@@ -153,27 +181,50 @@ def format_packet_line(details):
 
 
 class CaptureEngine:
-    """Manages packet capture in a background daemon thread."""
+    """Manages packet capture in a background daemon thread + writes PCAP for Wireshark."""
 
-    def __init__(self):
+    def __init__(self, log_dir=None):
+        log_dir = log_dir or os.environ.get("NTA_LOG_DIR", "logs")
+
+    def __init__(self, log_dir="logs"):
         self.running = False
         self.callback = None
         self.packets = []
         self._thread = None
 
-    def start(self, protocol="", port="", callback=None):
-        """Start capturing packets with optional filters."""
+        self.log_dir = Path(log_dir)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+
+        self._pcap_writer = None
+        self._pcap_path = None
+
+    def start(self, protocol="", port="", ip="", src_ip="", dst_ip="", callback=None):
+        """
+        Start capturing packets with optional filters.
+        Writes a Wireshark-readable PCAP into logs/.
+        """
         if not SCAPY_AVAILABLE:
             raise RuntimeError(
                 "Scapy is not installed. Please install it with:\n"
                 "  pip install scapy\nThen restart the application."
             )
 
-        bpf_filter = build_bpf_filter(protocol, port)
+        bpf_filter = build_bpf_filter(protocol, port, ip, src_ip, dst_ip)
+
         self.running = True
         self.callback = callback
         self.packets = []
         conf.verb = 0
+
+        # PCAP output file
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self._pcap_path = self.log_dir / f"traffic_{ts}.pcap"
+        self._pcap_writer = PcapWriter(str(self._pcap_path), append=True, sync=True)
+
+        if self.callback:
+            self.callback(f"[INFO] Capture started. PCAP: {self._pcap_path}")
+            if bpf_filter:
+                self.callback(f"[INFO] Filter: {bpf_filter}")
 
         self._thread = threading.Thread(
             target=self._capture_loop,
@@ -183,33 +234,59 @@ class CaptureEngine:
         self._thread.start()
 
     def _capture_loop(self, bpf_filter):
-        """Sniff loop running in daemon thread."""
+        """
+        Sniff loop running in daemon thread.
+        Uses a short timeout so stop() works even when the network is idle.
+        """
         try:
-            sniff(
-                filter=bpf_filter if bpf_filter else None,
-                prn=self._process_packet,
-                stop_filter=lambda _: not self.running,
-                store=False,
-            )
+            while self.running:
+                sniff(
+                    filter=bpf_filter if bpf_filter else None,
+                    prn=self._process_packet,
+                    store=False,
+                    timeout=1,  # ✅ allows stop even when no packets arrive
+                )
         except PermissionError:
             if self.callback:
-                self.callback(
-                    "[ERROR] Permission denied. Run with admin/root privileges."
-                )
+                self.callback("[ERROR] Permission denied. Run with admin/root privileges.")
         except Exception as e:
             if self.callback:
                 self.callback(f"[ERROR] Capture failed: {e}")
         finally:
             self.running = False
+            self._close_pcap()
+
+            if self.callback and self._pcap_path:
+                self.callback(f"[INFO] Capture stopped. Saved PCAP: {self._pcap_path}")
 
     def _process_packet(self, packet):
-        """Format a packet and send to callback."""
+        """Write raw packet to PCAP + format for UI callback."""
+        # Write packet for Wireshark
+        if self._pcap_writer is not None:
+            try:
+                self._pcap_writer.write(packet)
+            except Exception:
+                # Don’t crash UI if writer fails mid-capture
+                pass
+
+        # Keep your existing display/logging behavior
         details = format_packet(packet)
         self.packets.append(details)
         line = format_packet_line(details)
         if self.callback:
             self.callback(line)
 
+    def _close_pcap(self):
+        if self._pcap_writer is not None:
+            try:
+                self._pcap_writer.close()
+            finally:
+                self._pcap_writer = None
+
     def stop(self):
         """Signal the capture thread to stop."""
         self.running = False
+
+    def get_pcap_path(self):
+        """Return the last PCAP path (string) if available."""
+        return str(self._pcap_path) if self._pcap_path else ""

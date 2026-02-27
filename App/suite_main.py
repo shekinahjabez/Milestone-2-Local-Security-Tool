@@ -3,8 +3,20 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
+# --- Paths / Portable Data ---
+APP_DIR = os.path.dirname(os.path.abspath(__file__))          # .../App
+PORTABLE_ROOT = os.path.dirname(APP_DIR)                     # .../Milestone2_Local_Security_Tool
+DATA_DIR = os.path.join(PORTABLE_ROOT, "Data")
+LOG_DIR = os.path.join(DATA_DIR, "logs")
+SETTINGS_DIR = os.path.join(DATA_DIR, "settings")
+
+os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(SETTINGS_DIR, exist_ok=True)
+
+os.environ["NTA_DATA_DIR"] = DATA_DIR
+os.environ["NTA_LOG_DIR"] = LOG_DIR
+
 # Make App/ importable (so we can import NetworkTrafficAnalyzer and PortScanner)
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, APP_DIR)
 
 from NetworkTrafficAnalyzer.gui.app import NetworkTrafficAnalyzerApp
@@ -41,6 +53,8 @@ class NetworkSuiteApp:
         # Mount both tabs
         self.traffic_tab = NetworkTrafficAnalyzerApp(self.root, traffic_frame)
         self.scanner_tab = PortScannerApp(self.root, scanner_frame)
+        #self.traffic_tab = NetworkTrafficAnalyzerApp(traffic_frame, parent=self.root)
+        #self.scanner_tab = PortScannerApp(scanner_frame, parent=self.root)
 
         self._build_footer()
 
