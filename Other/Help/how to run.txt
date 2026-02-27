@@ -1,35 +1,147 @@
-LINUX:
-    Option A - Double-click (recommended):
-      1. Open the NetworkTrafficAnalyzerPortable/ folder in your
-         file manager.
-      2. Double-click "NetworkTraffic Analyzer".
-      3. A graphical password dialog will appear (like Windows UAC).
-      4. Enter your password and the app launches.
+============================================================
+  LOCAL SECURITY TOOL - Portable Edition
+  How to Run
+============================================================
 
-    Option B - Terminal:
-      1. Open a terminal in the NetworkTrafficAnalyzerPortable/ folder.
-      2. Run:  ./NetworkTrafficAnalyzerPortable.sh
-      3. A graphical password prompt will appear automatically.
-         (Falls back to terminal sudo if no desktop is detected.)
+REQUIREMENTS
+------------
+  - Python 3.8 or higher
+  - Scapy  (required for Traffic Analyzer)
+  - Tkinter (usually bundled with Python)
+  - Administrator / root privileges for packet capture
 
-    CLI mode (no GUI):
-      ./NetworkTrafficAnalyzerPortable.sh --cli
+  Install Scapy if not already installed:
+      pip install scapy
 
-  WINDOWS:
-    1. Navigate to the NetworkTrafficAnalyzerPortable\ folder.
-    2. Right-click NetworkTrafficAnalyzerPortable.bat ->
-       "Run as administrator".
-    3. CLI mode (no GUI):
-         Open Command Prompt as Administrator, then:
-         NetworkTrafficAnalyzerPortable.bat --cli
+  On Windows, also install Npcap (required by Scapy):
+      App\Dependencies\npcap-1.87.exe
+      (Run as Administrator, use default options.)
 
-  macOS:
-    1. Open Terminal and navigate to the
-       NetworkTrafficAnalyzerPortable/ folder.
-    2. Launch the app:
-         ./NetworkTrafficAnalyzerPortable.sh
-    3. If prompted, enter your password for sudo access.
-    4. CLI mode (no GUI):
-         ./NetworkTrafficAnalyzerPortable.sh --cli
-    5. Note: On macOS, you may need to allow Terminal in
-         System Settings -> Privacy & Security -> App Management.
+  Offline Scapy install (no internet needed):
+      pip install App\Dependencies\scapy-2.7.0-py3-none-any.whl
+
+
+============================================================
+  WINDOWS
+============================================================
+
+  No setup required.
+
+  1. Double-click:   LocalSecurityTool.bat
+
+  For packet capture (Traffic Analyzer tab):
+  - Right-click LocalSecurityTool.bat
+  - Select "Run as administrator"
+
+
+============================================================
+  LINUX
+============================================================
+
+  No setup required.
+
+  1. Double-click:   LocalSecurityTool.desktop
+  2. A graphical password prompt appears (like Windows UAC).
+  3. Enter your password — the app launches.
+
+  The launcher resolves its own location automatically and
+  handles privilege elevation without any prior setup step.
+
+  OPTIONAL — Install to application menu:
+    Run setup.sh once to add a shortcut to your app menu
+    (e.g. so it appears in GNOME Activities or KDE launcher).
+    1. Open a terminal in the LocalSecurityTool/ folder.
+    2. Run:  ./setup.sh
+    3. Answer Y when prompted to install the shortcut.
+
+
+============================================================
+  macOS
+============================================================
+
+  No setup required.
+
+  1. Double-click:   LocalSecurityTool.command
+  2. On first launch, macOS may block it.
+     Right-click -> Open to bypass Gatekeeper.
+  3. Terminal opens, a password prompt appears.
+  4. Enter your password — the app launches.
+
+  The launcher resolves its own location automatically.
+  No prior setup step is needed.
+
+  If sudo prompts appear repeatedly, you can allow Terminal
+  under: System Settings -> Privacy & Security -> App Management
+
+
+============================================================
+  USING THE APPLICATION
+============================================================
+
+  The tool opens a GUI window with two tabs:
+
+  [Traffic Analyzer]
+    - Select a network interface from the dropdown.
+    - Optionally filter by protocol (TCP / UDP / ICMP)
+      and/or port number.
+    - Click Start to begin live packet capture.
+    - Click Stop to end the session.
+    - Captured sessions are saved to:   Data/logs/
+
+  [Port Scanner]
+    - Enter a target IP address or hostname.
+    - Enter a port range (e.g. 1-1024) or specific port.
+    - Click Scan to begin.
+    - Results show OPEN / CLOSED status in real time.
+    - Scan sessions are saved to:   Data/logs/
+
+
+============================================================
+  FOLDER STRUCTURE
+============================================================
+
+  LocalSecurityTool/
+  ├── LocalSecurityTool.bat          Windows launcher (no setup needed)
+  ├── LocalSecurityTool.sh           Unix launcher (Linux & macOS)
+  ├── LocalSecurityTool.desktop      Linux shortcut  (no setup needed)
+  ├── LocalSecurityTool.command      macOS shortcut  (no setup needed)
+  ├── setup.sh                       Optional: install Linux app menu shortcut
+  │
+  ├── App/
+  │   ├── suite_main.py              Application entry point
+  │   ├── PortScanner/               Port Scanner module
+  │   ├── NetworkTrafficAnalyzer/    Traffic Analyzer module
+  │   ├── DefaultData/               Default settings template
+  │   └── Dependencies/              Offline installers
+  │
+  ├── Data/
+  │   ├── logs/                      Capture and scan logs
+  │   └── settings/                  User settings
+  │
+  └── Other/
+      └── Help/
+          └── how to run.txt         This file
+
+
+============================================================
+  NOTES
+============================================================
+
+  - The tool is fully portable. Copy the entire folder to a
+    USB drive and it works on any machine with no reinstall.
+    No setup is required on any platform.
+
+  - All launchers resolve their own location at runtime:
+      Windows  uses  %~dp0
+      Linux    uses  %k  (XDG desktop entry field code)
+      macOS    uses  BASH_SOURCE[0]
+
+  - Logs and settings are stored inside Data/ and never
+    written outside the LocalSecurityTool/ folder.
+
+  - Packet capture requires root/admin privileges. The
+    launchers handle privilege elevation automatically
+    (graphical prompt on Linux, Terminal sudo on macOS,
+    Run as Administrator on Windows).
+
+============================================================
