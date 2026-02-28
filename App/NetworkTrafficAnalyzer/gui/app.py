@@ -1,7 +1,8 @@
 """NetworkTraffic Analyzer - Tkinter GUI module."""
 
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+from tkinter import ttk, scrolledtext, messagebox, filedialog
+import shutil
 import os
 import sys
 from datetime import datetime
@@ -37,8 +38,16 @@ class NetworkTrafficAnalyzerApp:
             self.root.minsize(760, 560)
             self.root.configure(bg=BG_COLOR)
 
-        self.engine = CaptureEngine(log_dir=os.environ.get("NTA_LOG_DIR", "logs"))
+        self.engine = CaptureEngine(os.environ.get("NTA_LOG_DIR", "logs"))
+        self.session_active = False
+        self.had_capture = False        # <-- IMPORTANT (you referenced this later)
+        self.log_exported = True        # nothing to export yet
+        self.last_pcap_path = ""        # set after Stop
+
+        self.log_dir = os.environ.get("NTA_LOG_DIR", "logs")
+        os.makedirs(self.log_dir, exist_ok=True)
         ...
+        self.packet_count = {"TCP": 0, "UDP": 0, "ICMP": 0, "Other": 0}
         self._build_ui()
         self._check_scapy()
 
@@ -182,6 +191,8 @@ class NetworkTrafficAnalyzerApp:
         )
         self.export_btn.pack(side=tk.LEFT, padx=6)
 
+        self.export_btn.config(state=tk.DISABLED)
+
     def _build_display(self):
         section = tk.Frame(self.parent, bg=WHITE, padx=24, pady=16)
         section.pack(fill=tk.BOTH, expand=True, padx=24, pady=(4, 4))
@@ -262,10 +273,13 @@ class NetworkTrafficAnalyzerApp:
             messagebox.showerror("Filter Error", str(e))
             return
 
+        self.session_active = True
+        self.had_capture = True
+        self.log_exported = False
+
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
-        self.packet_count = {"TCP": 0, "UDP": 0, "ICMP": 0, "Other": 0}
-        self._update_stats()
+        self.export_btn.config(state=tk.DISABLED)
 
         filter_desc = (
             f"Protocol={protocol or 'All'}, Port={port or 'Any'}, "
@@ -275,14 +289,16 @@ class NetworkTrafficAnalyzerApp:
 
     def _stop_capture(self):
         self.engine.stop()
+
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
 
-        pcap_path = self.engine.get_pcap_path() if hasattr(self.engine, "get_pcap_path") else ""
-        if pcap_path:
-            self._append_output(f"Capture stopped. Saved PCAP: {pcap_path}\n", tag="info")
-        else:
-            self._append_output("Capture stopped.\n", tag="info")
+        self.session_active = False
+
+        # Enable export AFTER stopping
+        self.export_btn.config(state=tk.NORMAL)
+
+        self._append_output("Capture stopped. Click 'Export Log' to save results.\n", tag="info")
 
     def _on_packet(self, line):
         """Thread-safe callback: schedule GUI update on main thread."""
@@ -322,24 +338,60 @@ class NetworkTrafficAnalyzerApp:
             label.config(text=f"{proto}: {self.packet_count[proto]}")
 
     def _export_log(self):
-        """Save captured output to Data/logs/."""
+        """Export BOTH: (1) text log and (2) pcap into logs/."""
+        if self.engine.running:
+            messagebox.showwarning("Export", "Stop the capture before exporting.")
+            return
+
         content = self.output_text.get("1.0", tk.END).strip()
         if not content:
             messagebox.showinfo("Export", "Nothing to export yet.")
             return
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"capture_{timestamp}.log"
-        filepath = os.path.join(self.log_dir, filename)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
+        # 1) Save LOG text
+        log_name = f"capture_{ts}.log"
+        log_path = os.path.join(self.log_dir, log_name)
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(content + "\n")
 
-        messagebox.showinfo("Export Successful", f"Log saved to:\n{filepath}")
+        # 2) Save PCAP (ONLY NOW)
+        pcap_note = "No packets captured, so no PCAP was created."
+        try:
+            pcap_path = ""
+            if hasattr(self.engine, "export_pcap"):
+                pcap_path = self.engine.export_pcap(self.log_dir)
+
+            if pcap_path and os.path.isfile(pcap_path):
+                pcap_note = f"PCAP saved to:\n{pcap_path}"
+        except Exception as e:
+            pcap_note = f"PCAP export failed: {e}"
+
+        self.log_exported = True
+        self.export_btn.config(state=tk.DISABLED)
+
+        messagebox.showinfo(
+            "Export Successful",
+            f"Log saved to:\n{log_path}\n\n{pcap_note}"
+        )
+        self._append_output(f"[INFO] Exported log: {log_path}\n", tag="info")
+        if pcap_note.startswith("PCAP saved to:"):
+            self._append_output(f"[INFO] {pcap_note}\n", tag="info")
 
     def _on_close(self):
         if self.engine.running:
-            self.engine.stop()
+            messagebox.showwarning("Capture Running", "Stop the capture before exiting.")
+            return
+
+        if self.had_capture and not self.log_exported:
+            messagebox.showwarning(
+                "Unsaved Session",
+                "You captured traffic but haven't exported yet.\n\n"
+                "Click 'Export Log' to save to Data/logs before exiting."
+            )
+            return
+
         self.root.destroy()
 
     def shutdown(self):
