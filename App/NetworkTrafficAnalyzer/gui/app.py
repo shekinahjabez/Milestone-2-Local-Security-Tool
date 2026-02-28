@@ -281,7 +281,11 @@ class NetworkTrafficAnalyzerApp:
         self.stop_btn.config(state=tk.NORMAL)
         self.export_btn.config(state=tk.DISABLED)
 
-        self._append_output("[INFO] Capture started.\n", tag="info")
+        filter_desc = (
+            f"Protocol={protocol or 'All'}, Port={port or 'Any'}, "
+            f"IP={ip_any or 'Any'}, SRC={src_ip or 'Any'}, DST={dst_ip or 'Any'}"
+        )
+        self._append_output(f"Capture started... ({filter_desc})\n", tag="info")
 
     def _stop_capture(self):
         self.engine.stop()

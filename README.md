@@ -1,4 +1,3 @@
-📄 README.md
 # Local Security Tool (Portable Edition)
 
 Local Security Tool is an integrated security application developed for  
@@ -44,7 +43,7 @@ The tool demonstrates modular architecture by integrating active scanning and pa
 
 ## 📂 Project Structure
 
-
+```
 LocalSecurityToolPortable/
 │
 ├── LocalSecurityTool.bat
@@ -52,16 +51,16 @@ LocalSecurityToolPortable/
 ├── LocalSecurityTool.desktop
 │
 ├── App/
-│ ├── suite_main.py
-│ ├── PortScanner/
-│ ├── NetworkTrafficAnalyzer/
+│   ├── suite_main.py
+│   ├── PortScanner/
+│   ├── NetworkTrafficAnalyzer/
 │
 ├── Data/
-│ ├── logs/
-│ ├── settings/
+│   ├── logs/
+│   ├── settings/
 │
 └── README.md
-
+```
 
 ---
 
@@ -76,56 +75,79 @@ Install Scapy if needed:
 
 ```bash
 pip install scapy
-🚀 How to Run
-Windows
+```
+
+---
+
+## 🚀 How to Run
+
+### Windows
 
 Double-click:
 
+```
 LocalSecurityTool.bat
+```
 
-For packet capture, run as Administrator.
+For packet capture, run as **Administrator**.
 
-Linux
+---
+
+### Linux
+
+```bash
 chmod +x LocalSecurityTool.sh
 ./LocalSecurityTool.sh
+```
 
 If packet capture fails:
 
+```bash
 sudo ./LocalSecurityTool.sh
-macOS
+```
+
+---
+
+### macOS
+
+```bash
 ./LocalSecurityTool.sh
-🖥 Application Menu
+```
+
+---
+
+## 🖥 Application Menu
 
 Upon launch:
 
+```
 LOCAL SECURITY TOOL
 1. Port Scanner
 2. Traffic Analyzer
 3. View Logs
 4. Exit
+```
 
 Users select the desired module from the integrated menu.
 
-🎓 Educational Purpose
+---
+
+## 🎓 Educational Purpose
 
 This project demonstrates:
 
-Modular program design
+- Modular program design  
+- Socket-based port scanning  
+- Real-time packet analysis using Scapy  
+- Protocol and port filtering  
+- Error handling and validation  
+- Logging and audit trail mechanisms  
+- Integration of multiple security utilities  
 
-Socket-based port scanning
+Developed for academic purposes under **MO-IT142 Security Script Programming**.
 
-Real-time packet analysis using Scapy
+---
 
-Protocol and port filtering
-
-Error handling and validation
-
-Logging and audit trail mechanisms
-
-Integration of multiple security utilities
-
-Developed for academic purposes under MO-IT142.
-
-License
+## 📜 License
 
 Educational use only.

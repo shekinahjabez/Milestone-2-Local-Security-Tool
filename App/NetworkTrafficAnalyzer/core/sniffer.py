@@ -4,28 +4,60 @@ import os
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
+import ipaddress
 
 try:
-    from scapy.all import IP, TCP, UDP, ICMP, conf, AsyncSniffer, wrpcap
+    from scapy.all import sniff, IP, TCP, UDP, ICMP, conf
+    from scapy.utils import PcapWriter
     SCAPY_AVAILABLE = True
 except ImportError:
     SCAPY_AVAILABLE = False
 
 
-def build_bpf_filter(protocol="", port=""):
-    """Build a BPF filter string from protocol and port values."""
+def _validate_ip(value: str, label: str) -> str:
+    """Validate an IPv4/IPv6 address string. Returns normalized string."""
+    value = (value or "").strip()
+    if not value:
+        return ""
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        raise ValueError(f"Invalid {label} '{value}'. Enter a valid IP address.")
+
+
+def build_bpf_filter(protocol="", port="", ip="", src_ip="", dst_ip=""):
+    """
+    Build a BPF filter string from protocol/port and IP filters.
+    - ip: match either src or dst (host X)
+    - src_ip: match src host X
+    - dst_ip: match dst host X
+    """
     parts = []
-    protocol = protocol.strip().lower()
-    port = port.strip()
+
+    protocol = (protocol or "").strip().lower()
+    port = (port or "").strip()
+
+    ip = _validate_ip(ip, "IP")
+    src_ip = _validate_ip(src_ip, "Source IP")
+    dst_ip = _validate_ip(dst_ip, "Destination IP")
 
     valid_protocols = ("tcp", "udp", "icmp", "")
     if protocol not in valid_protocols:
-        raise ValueError(
-            f"Invalid protocol '{protocol}'. Please enter TCP, UDP, or ICMP."
-        )
+        raise ValueError(f"Invalid protocol '{protocol}'. Please enter TCP, UDP, or ICMP.")
+
     if protocol:
         parts.append(protocol)
 
+    # IP filters
+    if ip:
+        parts.append(f"host {ip}")
+    if src_ip:
+        parts.append(f"src host {src_ip}")
+    if dst_ip:
+        parts.append(f"dst host {dst_ip}")
+
+    # Port filter
     if port:
         if protocol == "icmp":
             raise ValueError("ICMP does not use ports. Remove the port filter.")
@@ -34,9 +66,7 @@ def build_bpf_filter(protocol="", port=""):
             if not 1 <= port_num <= 65535:
                 raise ValueError
         except ValueError:
-            raise ValueError(
-                f"Invalid port '{port}'. Enter a number between 1 and 65535."
-            )
+            raise ValueError(f"Invalid port '{port}'. Enter a number between 1 and 65535.")
         parts.append(f"port {port_num}")
 
     return " and ".join(parts) if parts else ""
@@ -162,9 +192,7 @@ def format_packet(packet):
         details["protocol"] = "ICMP"
         icmp_type = packet[ICMP].type
         icmp_code = packet[ICMP].code
-        desc = ICMP_TYPE_NAMES.get(
-            (icmp_type, icmp_code), f"Type {icmp_type}, Code {icmp_code}"
-        )
+        desc = ICMP_TYPE_NAMES.get((icmp_type, icmp_code), f"Type {icmp_type}, Code {icmp_code}")
         details["summary"] = desc
     else:
         details["summary"] = packet.summary()
@@ -255,6 +283,13 @@ class CaptureEngine:
         line = format_packet_line(details)
         if self.callback:
             self.callback(line)
+
+    def _close_pcap(self):
+        if self._pcap_writer is not None:
+            try:
+                self._pcap_writer.close()
+            finally:
+                self._pcap_writer = None
 
     def stop(self):
         """Stop capture (NO file writing here)."""
